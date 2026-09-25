@@ -53,21 +53,17 @@ git push origin v1.1.0
 
 ## What the Workflow Does
 
-1. **Setup Environment**: Installs Node.js and Java
-2. **Install Dependencies**: Runs `npm ci` to install project dependencies
-3. **Build APKs**: Uses Gradle to build release APKs for all architectures
-4. **Sign APKs**: Signs the APKs with your release keystore
-5. **Create Release**: Creates a GitHub release with the tag
-6. **Upload APKs**: Uploads all split APKs to the release
+1. **Setup Environment**: Installs Java
+2. **Build APK**: Uses Gradle to build the release APK
+3. **Sign APK**: Signs the APK with your release keystore
+4. **Create Release**: Creates a GitHub release with the tag
+5. **Upload APK**: Uploads the APK to the release
 
 ## Generated APK Files
 
-The workflow creates the following APK files:
+The workflow creates the following files:
 
-- `alternate-arm64-v8a-[tag].apk` - For modern 64-bit ARM devices
-- `alternate-armeabi-v7a-[tag].apk` - For older 32-bit ARM devices
-- `alternate-x86_64-[tag].apk` - For 64-bit x86 devices
-- `alternate-x86-[tag].apk` - For 32-bit x86 devices
+- `alternate-[tag].apk` - Universal APK (the app has no native code, so one APK fits every device)
 - `output-metadata.json` - Build metadata
 
 ## Troubleshooting
@@ -76,19 +72,13 @@ The workflow creates the following APK files:
 
 1. **Keystore decoding fails**: Make sure your base64 encoding doesn't contain newlines
 2. **Signing fails**: Verify your keystore password, key alias, and key password are correct
-3. **Build fails**: Check that your dependencies are properly defined in package.json
+3. **Build fails**: Run `./gradlew assembleRelease` in `android/` locally and check the Gradle output
 
 ### Testing the Build Locally
 
 Before pushing a tag, you can test the build process locally:
 
 ```bash
-# Install dependencies
-npm ci
-
-# Prebuild
-npx expo prebuild --platform android --clean
-
 # Build (replace with your actual keystore details)
 cd android
 ./gradlew assembleRelease \
@@ -102,7 +92,4 @@ cd android
 
 After a successful build, APKs will be located at:
 
-- `android/app/build/outputs/apk/release/app-arm64-v8a-release.apk`
-- `android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk`
-- `android/app/build/outputs/apk/release/app-x86_64-release.apk`
-- `android/app/build/outputs/apk/release/app-x86-release.apk`
+- `android/app/build/outputs/apk/release/app-release.apk`
