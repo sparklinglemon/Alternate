@@ -45,9 +45,8 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.release
-            }
+            // Without keystore.properties fall back to the debug key: Android won't install an unsigned APK.
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
