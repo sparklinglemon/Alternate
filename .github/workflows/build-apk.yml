@@ -1,7 +1,7 @@
 name: Build APK
 
-# Builds the release APK on every push and pull request and attaches it to the run as an artifact
-# (Actions tab -> run -> Artifacts). Can also be started by hand from the Actions tab.
+# Builds the release APK on every push and pull request and attaches it to the run
+# (Actions tab -> run -> Artifacts -> download the .apk). Can also be started by hand from the Actions tab.
 # Signed with the release key when the KEYSTORE_* secrets exist, otherwise with the debug key.
 on:
   push:
@@ -16,20 +16,20 @@ concurrency:
 jobs:
   build:
     name: Build APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Set up release signing (only if secrets are configured)
         env:
@@ -56,9 +56,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
+      - name: Name the APK after the commit
+        run: cp android/app/build/outputs/apk/release/app-release.apk "alternate-${GITHUB_SHA::7}.apk"
+
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: alternate-${{ github.sha }}
-          path: android/app/build/outputs/apk/release/*.apk
+          path: alternate-*.apk
+          archive: false # upload the .apk itself instead of a .zip
           if-no-files-found: error
