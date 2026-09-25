@@ -6,7 +6,6 @@ on:
       - "*"
 
 env:
-  NODE_VERSION: "18"
   JAVA_VERSION: "17"
   KEYSTORE_FILE: "release.jks"
 
@@ -19,19 +18,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
@@ -41,18 +32,22 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Decode Keystore
+      - name: Set up release signing (only if secrets are configured)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          echo $KEYSTORE_BASE64 | base64 -d > android/app/${{ env.KEYSTORE_FILE }}
-
-      - name: Generate keystore.properties
-        run: |
-          cat <<EOF > android/keystore.properties
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No KEYSTORE_BASE64 secret: the APK is signed with the debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/${{ env.KEYSTORE_FILE }}
+          cat > android/keystore.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
           storeFile=${{ env.KEYSTORE_FILE }}
           EOF
 
@@ -65,8 +60,8 @@ jobs:
         id: tag
         run: |
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          # Extract versionCode from app.json
-          VERSION_CODE=$(cat app.json | grep -o '"versionCode":[[:space:]]*[0-9]\+' | grep -o '[0-9]\+')
+          # Extract versionCode from the app's build.gradle
+          VERSION_CODE=$(grep -o 'versionCode[[:space:]]*[0-9]\+' android/app/build.gradle | grep -o '[0-9]\+')
           echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
 
       - name: Get changelog from versionCode
@@ -123,7 +118,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           release_name: Release ${{ steps.tag.outputs.tag }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             # 🚀 Alternate ${{ steps.tag.outputs.tag }} – ${{ steps.changelog.outputs.description }}
 
@@ -131,64 +126,29 @@ jobs:
 
             ${{ steps.changelog.outputs.changelog_bullets }}
 
-            ## 📦 Download Options
+            ## 📦 Download
 
-            Choose the APK that matches your device architecture:
-
-            - **ARM64 (64-bit)** – Recommended for most modern devices  
-            - **ARM (32-bit)** – For older Android devices  
-            - **x86 (64-bit)** – For Intel-based Android devices/emulators  
-            - **x86 (32-bit)** – For older Intel-based devices  
+            One universal APK works on every device (ARM and x86, 32 and 64-bit).
 
             ## 🔧 Installation
 
-            1. Download the appropriate APK for your device
+            1. Download the APK
             2. Enable "Install from unknown sources" in your Android settings
             3. Install the APK file
 
             ## 📋 System Requirements
 
             - Android 7.0 (API level 24) or higher
-            - Permissions: Contacts, Phone
+            - Permissions: Phone, Call log, Display over other apps
 
-      - name: Upload arm64-v8a APK
+      - name: Upload APK
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          asset_name: alternate-arm64-v8a-${{ steps.tag.outputs.tag }}.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Upload armeabi-v7a APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
-          asset_name: alternate-armeabi-v7a-${{ steps.tag.outputs.tag }}.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Upload x86_64 APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android/app/build/outputs/apk/release/app-x86_64-release.apk
-          asset_name: alternate-x86_64-${{ steps.tag.outputs.tag }}.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Upload x86 APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android/app/build/outputs/apk/release/app-x86-release.apk
-          asset_name: alternate-x86-${{ steps.tag.outputs.tag }}.apk
+          asset_path: android/app/build/outputs/apk/release/app-release.apk
+          asset_name: alternate-${{ steps.tag.outputs.tag }}.apk
           asset_content_type: application/vnd.android.package-archive
 
       - name: Upload metadata

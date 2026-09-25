@@ -1,4 +1,4 @@
-Alternate is a privacy-focused React Native app that helps you identify unknown callers without cluttering your device's main contact list. Perfect for temporary number storage when you need to know who's calling but don't want the number to appear in WhatsApp, Telegram, or other messaging apps.
+Alternate is a privacy-focused, lightweight native Android app that helps you identify unknown callers without cluttering your device's main contact list. Perfect for temporary number storage when you need to know who's calling but don't want the number to appear in WhatsApp, Telegram, or other messaging apps.
 
 <br><b>Features:</b>
 
@@ -6,7 +6,7 @@ Alternate is a privacy-focused React Native app that helps you identify unknown 
 - Temporary number storage (does not affect your main contacts)
 - Privacy: Numbers won't appear in WhatsApp, Telegram, or other messaging apps
 - Phone number validation with country selection
-- Custom native module for caller ID (Android)
+- Native caller ID popup and contacts directory
 - Support Call directory in google phone app
 - Modern Material Design 3 UI
 - Offline storage using SQLite database

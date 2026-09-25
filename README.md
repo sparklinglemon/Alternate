@@ -42,7 +42,7 @@
 
 # Alternate - Local Caller ID Detector
 
-A privacy-focused React Native app that helps you identify unknown callers without cluttering your device's main contact list. Perfect for temporary number storage when you need to know who's calling but don't want the number to appear in WhatsApp, Telegram, or other messaging apps.
+A privacy-focused, lightweight native Android app (Kotlin) that helps you identify unknown callers without cluttering your device's main contact list. Perfect for temporary number storage when you need to know who's calling but don't want the number to appear in WhatsApp, Telegram, or other messaging apps.
 
 ## Features
 
@@ -50,8 +50,9 @@ A privacy-focused React Native app that helps you identify unknown callers witho
 - **Temporary Number Storage**: Save numbers locally without affecting your main contacts
 - **Privacy Protection**: Numbers won't appear in WhatsApp, Telegram, or other messaging apps
 - **Phone Number Validation**: Smart phone number input with country selection
-- **Custom Native Module**: Built-in caller ID functionality using Android's native capabilities
-- **Country Selector**: Beautiful bottom sheet country picker with search
+- **Paste Friendly**: Paste numbers straight from your dialer (`+91 98765 43210`, `(555) 123-4567`, ...) and the country is picked automatically
+- **Native Caller ID**: Call popup and contacts directory built on Android's own telephony APIs
+- **Country Selector**: Searchable country picker
 - **Material Design**: Modern UI following Material Design 3 principles
 - **Offline Storage**: All data stored locally using Android's native SQLite database
 
@@ -66,10 +67,10 @@ When you receive calls from unknown numbers but don't want to save them to your 
 
 ## Tech Stack
 
-- **React Native** with **Expo**
-- **TypeScript** for type safety
-- **React Native Paper** for Material Design components
-- **Room** for local data storage
+- **Kotlin**, Android framework only: no AndroidX, Compose or third-party libraries
+- Plain **SQLite** for local storage (same database as earlier versions, so updates keep your contacts)
+- Material You colours on Android 12+, Material 3 baseline colours on older versions
+- Release APK is a single universal file of a few hundred KB (R8 + resource shrinking)
 
 ## Screenshots
 
@@ -85,133 +86,45 @@ When you receive calls from unknown numbers but don't want to save them to your 
 
 <!-- ## Download -->
 
-## Installation
+## Building
 
 ### Prerequisites
 
-- Node.js (v18 or later)
-- npm or yarn
-- Expo CLI
-- Android Studio (for Android development)
-- Xcode (for iOS development, macOS only)
+- JDK 17 or newer
+- Android SDK (API 35), e.g. via Android Studio
 
-### Setup
-
-1. Clone the repository:
+### Build
 
 ```bash
 git clone https://github.com/BioHazard786/Alternate.git
-cd Alternate
+cd Alternate/android
+./gradlew assembleDebug      # android/app/build/outputs/apk/debug/
+./gradlew assembleRelease    # android/app/build/outputs/apk/release/
 ```
 
-2. Install dependencies:
+Without `android/keystore.properties` the release APK is signed with the debug key, which is fine for testing.
+To sign with your own key, see [ANDROID_RELEASE_SETUP.md](ANDROID_RELEASE_SETUP.md). APKs signed with different
+keys cannot update each other.
 
-```bash
-npm install
-```
-
-3. Start the development server:
-
-```bash
-npx expo start
-```
-
-## Building APK
-
-### Development Build
-
-To build a development APK:
-
-```bash
-npx expo run:android
-```
-
-### Production Build with EAS
-
-1. Install EAS CLI:
-
-```bash
-npm install -g eas-cli
-```
-
-2. Configure EAS:
-
-```bash
-npx eas build:configure
-```
-
-3. Build for Android:
-
-```bash
-npx eas build --platform android
-```
-
-### Local Production Build
-
-To build a production APK locally without EAS:
-
-#### Method 1: Quick Build (Debug-Signed)
-
-For development and testing purposes:
-
-1. Install dependencies:
-
-```bash
-npm ci
-```
-
-2. Build for Android:
-
-```bash
-cd android
-./gradlew assembleRelease
-```
-
-**Note:** This creates a release APK but signed with debug keystore. The APK will be generated at `android/app/build/outputs/apk/release/`
-
-#### Method 2: Properly Signed APK (Recommended for Distribution)
-
-For production distribution, use Android Studio to create a properly signed APK:
-
-1. **Open the project in Android Studio**:
-
-   - Open Android Studio
-   - Select "Open an existing Android Studio project"
-   - Navigate to the `android` folder in your project
-   - Click "OK"
-
-2. **Generate Signed APK**:
-
-   - Go to `Build` → `Generate Signed Bundle / APK`
-   - Select "APK" and click "Next"
-   - Choose "Create new..." to generate a new keystore or "Choose existing..." if you have one
-   - Fill in the keystore details (store this information securely!)
-   - Click "Next"
-   - Select "release" build variant
-   - Click "Create"
-
-3. **Locate the signed APK**:
-   - The signed APK will be generated in `android/app/release/`
-   - This APK is properly signed and ready for distribution
-
-**Important Notes:**
-
-- Debug-signed APKs (from `./gradlew assembleRelease`) are fine for development and testing
-- For Play Store or distribution to users, always use properly signed APKs from Android Studio
-- APKs signed with different keystores cannot update each other on Android devices
+You can also open the `android` folder in Android Studio and run it from there.
 
 ## Project Structure
 
 ```
-├── app/                    # Main app screens
-├── components/            # Reusable components
-├── constants/            # App constants
-├── hooks/               # Custom hooks
-├── lib/                 # Utility functions and types
-├── modules/             # Custom native modules
-│   └── caller-id/       # Caller ID native module with SQLite integration
-├── store/               # State management
-└── assets/              # Images and other assets
+android/app/src/main/java/com/lulu786/Alternate/
+├── MainActivity.kt        # Contact list, search, multi-select
+├── ContactActivity.kt     # Contact details
+├── EditActivity.kt        # Add / edit contact, country picker, photo
+├── SettingsActivity.kt    # Settings, VCF import/export, passcode
+├── LockActivity.kt        # PIN / biometric lock screen
+├── CallReceiver.kt        # Call popup + call screening service
+├── DirectoryProvider.kt   # Caller names for the system dialer / call log
+├── Contact.kt             # Contact model, SQLite database, in-memory store
+├── Phone.kt               # Countries, phone number parsing and formatting
+├── Vcf.kt                 # vCard import/export
+├── Lock.kt                # Passcode + auto-lock state
+├── Share.kt               # Share .vcf files
+└── Ui.kt                  # Theme colours and small view helpers
 ```
 
 ## How It Works
@@ -249,7 +162,7 @@ Project Link: [https://github.com/BioHazard786/Alternate](https://github.com/Bio
 
 ## Acknowledgments
 
-- Thanks To dmkvsk for native module inspiration [Repo](https://github.com/dmkvsk/react-native-detect-caller-id)
+- Thanks To dmkvsk for caller ID inspiration [Repo](https://github.com/dmkvsk/react-native-detect-caller-id)
 - Thanks To SimpleNexus for call directory implementation [Repo](https://github.com/SimpleNexus/simplecallerid)
 
 ---

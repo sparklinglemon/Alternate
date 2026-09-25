@@ -54,3 +54,8 @@ android/app/release/
 
 # Test files
 test.ts
+# Android Studio / Gradle
+.idea/
+*.iml
+.gradle/
+android/.kotlin/

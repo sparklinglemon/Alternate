@@ -1,0 +1,6 @@
+v3.0.0 - Rewritten in Kotlin
+ - Rebuilt as a native Kotlin app with no third-party libraries, so it is a much smaller download
+ - One universal APK instead of per-architecture builds
+ - Fixed: phone numbers pasted from the dialer (with spaces, dashes or brackets) could not be saved
+ - Pasting a number with a country code (+44..., 0044...) now selects the country automatically
+ - Existing contacts and popup settings carry over; passcode and theme need to be set again once

@@ -50,7 +50,7 @@ Thank you for your interest in contributing to Alternate! Your help is greatly a
 - Use consistent formatting and indentation.
 - Write clear and descriptive variable and function names.
 - Add comments for complex logic.
-- Use TypeScript for all new code.
+- Write new code in Kotlin and keep the app dependency-free (Android framework only).
 
 ## Commit Messages
 
