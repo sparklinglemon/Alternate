@@ -52,6 +52,15 @@ android/local.properties
 # Android release files
 android/app/release/
 
+# Release signing: never commit the release key, its passwords or base64 dumps of it
+*.keystore
+!android/app/debug.keystore
+keystore.properties
+keystore/
+*_base64.txt
+*.base64
+*.b64
+
 # Test files
 test.ts
 # Android Studio / Gradle
