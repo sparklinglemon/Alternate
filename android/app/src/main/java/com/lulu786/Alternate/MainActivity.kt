@@ -32,6 +32,10 @@ class MainActivity : BaseActivity() {
     private lateinit var fab: TextView
     private lateinit var empty: LinearLayout
     private lateinit var emptyText: TextView
+    private lateinit var suggest: LinearLayout
+    private lateinit var suggestTitle: TextView
+    private lateinit var frame: FrameLayout
+    private var scrolled = false
     private val rows = ArrayList<Row>()
     private val selected = LinkedHashMap<String, Contact>()
     private var searching = false
@@ -69,6 +73,27 @@ class MainActivity : BaseActivity() {
             gravity = Gravity.CENTER
             setPadding(dp(32), 0, dp(32), dp(64))
         }
+        suggestTitle = text("", 17f)
+        suggest = horizontal(
+            Avatar(this).apply {
+                bg = p.primaryContainer
+                fg = p.onPrimaryContainer
+                icon = getDrawable(R.drawable.ic_add)
+                layoutParams = LinearLayout.LayoutParams(dp(45), dp(45))
+            },
+            vertical(suggestTitle, text("Add as a new contact", 14f, p.outline)),
+        ).apply {
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            (getChildAt(1).layoutParams as LinearLayout.LayoutParams).apply { width = 0; weight = 1f; marginStart = dp(16) }
+            val bg = shape(p.container, dp(16).toFloat())
+            background = ripple(bg, bg)
+            visibility = View.GONE
+            setOnClickListener {
+                val number = suggestTitle.tag as String
+                setSearching(false)
+                startActivity(Intent(this@MainActivity, EditActivity::class.java).putExtra("prefill", number))
+            }
+        }
         fab = TextView(this).apply {
             gravity = Gravity.CENTER
             minWidth = dp(60)
@@ -80,15 +105,21 @@ class MainActivity : BaseActivity() {
             val bg = shape(p.secondaryContainer, dp(18).toFloat())
             background = ripple(bg, bg)
         }
-        setScreen(FrameLayout(this).apply {
+        frame = FrameLayout(this).apply {
             addView(vertical(bar, FrameLayout(this@MainActivity).apply {
                 addView(list, MATCH, MATCH)
                 addView(empty, MATCH, MATCH)
+                addView(suggest, FrameLayout.LayoutParams(MATCH, WRAP).apply { setMargins(dp(16), dp(16), dp(16), 0) })
             }).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
             addView(fab, FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM or Gravity.END).apply {
                 setMargins(0, 0, dp(20), dp(20))
             })
-        })
+        }
+        setScreen(frame)
+        tintOnScroll(bar, list) {
+            scrolled = it
+            if (selected.isEmpty()) updateFab()
+        }
 
         if (savedInstanceState == null) {
             requestPermissions(arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG), 1)
@@ -160,7 +191,13 @@ class MainActivity : BaseActivity() {
             group.forEachIndexed { i, c -> rows += Row.Item(c, i, i == 0, i == group.lastIndex) }
         }
         adapter.notifyDataSetChanged()
-        empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        // Searching for a number that isn't saved offers to save it.
+        val digits = Phone.clean(search.text.toString())
+        val offer = searching && rows.isEmpty() && digits.removePrefix("+").length >= 5
+        suggestTitle.text = "Save $digits"
+        suggestTitle.tag = digits
+        suggest.visibility = if (offer) View.VISIBLE else View.GONE
+        empty.visibility = if (rows.isEmpty() && !offer) View.VISIBLE else View.GONE
         emptyText.text = if (searching) "Type a name, number or email to search" else "Add your first contact"
         // Drop selections for contacts that no longer exist.
         selected.keys.retainAll(Store.contacts.mapTo(HashSet()) { it.fullPhoneNumber })
@@ -196,6 +233,7 @@ class MainActivity : BaseActivity() {
         if (selecting) {
             fab.text = "Share"
             fab.setPadding(dp(20), 0, dp(24), 0)
+            fab.compoundDrawablePadding = dp(8)
             fab.setCompoundDrawablesRelative(drawable(R.drawable.ic_share, p.onSecondaryContainer), null, null, null)
             fab.contentDescription = "Share"
             fab.setOnClickListener {
@@ -204,12 +242,19 @@ class MainActivity : BaseActivity() {
                 refresh()
             }
         } else {
-            fab.text = ""
-            fab.setPadding(0, 0, 0, 0)
-            fab.setCompoundDrawablesRelative(drawable(R.drawable.ic_add, p.onSecondaryContainer), null, null, null)
-            fab.contentDescription = "Add contact"
+            updateFab()
+            fab.contentDescription = "Add number"
             fab.setOnClickListener { startActivity(Intent(this, EditActivity::class.java)) }
         }
+    }
+
+    /** "Add number" while at the top of the list, just the icon once scrolled. */
+    private fun updateFab() {
+        if (fab.isLaidOut) android.transition.TransitionManager.beginDelayedTransition(frame, android.transition.ChangeBounds().setDuration(200))
+        fab.text = if (scrolled) "" else "Add number"
+        fab.compoundDrawablePadding = if (scrolled) 0 else dp(8)
+        if (scrolled) fab.setPadding(0, 0, 0, 0) else fab.setPadding(dp(16), 0, dp(20), 0)
+        fab.setCompoundDrawablesRelative(drawable(R.drawable.ic_add, p.onSecondaryContainer), null, null, null)
     }
 
     private fun copySelected() {
@@ -253,7 +298,7 @@ class MainActivity : BaseActivity() {
             val row = rows[position]
             if (row is Row.Header) {
                 val v = convertView as? TextView ?: text("", 14f, p.primary, true).apply {
-                    setPadding(dp(8), dp(16), dp(8), dp(8))
+                    setPadding(dp(12), dp(16), dp(12), dp(8))
                 }
                 v.text = row.letter
                 return v

@@ -32,6 +32,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsetsController
+import android.widget.AbsListView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -221,6 +222,42 @@ abstract class BaseActivity : Activity() {
         }
     }
 
+    // Screens slide in from the right and fade out on the way back.
+    @Suppress("DEPRECATION")
+    override fun startActivity(intent: Intent, options: Bundle?) {
+        super.startActivity(intent, options)
+        if (intent.flags and Intent.FLAG_ACTIVITY_NO_ANIMATION == 0 && intent.component?.packageName == packageName) {
+            overridePendingTransition(R.anim.screen_in, R.anim.hold)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(0, R.anim.screen_out)
+    }
+
+    /** Gives [bar] (and the status bar) the container colour once [scroller] leaves the top. */
+    fun tintOnScroll(bar: View, scroller: View, onChange: (Boolean) -> Unit = {}) {
+        var tinted = false
+        fun set(on: Boolean) {
+            if (on == tinted) return
+            tinted = on
+            val color = if (on) p.container else p.surface
+            bar.setBackgroundColor(color)
+            @Suppress("DEPRECATION")
+            window.statusBarColor = color
+            onChange(on)
+        }
+        if (scroller is AbsListView) scroller.setOnScrollListener(object : AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(v: AbsListView, state: Int) {}
+            override fun onScroll(v: AbsListView, first: Int, visible: Int, total: Int) {
+                val top = v.getChildAt(0)?.top ?: v.paddingTop
+                set(first > 0 || top < v.paddingTop - dp(4))
+            }
+        }) else scroller.setOnScrollChangeListener { _, _, y, _, _ -> set(y > dp(4)) }
+    }
+
     fun setScreen(content: View) {
         setContentView(FrameLayout(this).apply {
             fitsSystemWindows = true
@@ -321,14 +358,18 @@ abstract class BaseActivity : Activity() {
         setOnClickListener { onClick() }
     }
 
-    /** Rounded list group: big corners at the ends, small ones in between, 2dp gaps (Material 3 style). */
-    fun group(title: String?, rows: List<View>) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        val all = (if (title != null) listOf(text(title, 16f, p.onSurface, true).apply {
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-        }) else emptyList()) + rows
-        all.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(MATCH, WRAP).apply { if (i > 0) topMargin = dp(2) }) }
-        regroup(this)
+    /**
+     * Rounded list group: big corners at the ends, small ones in between, 2dp gaps (Material 3 style).
+     * The title sits above the card as a small primary-coloured label.
+     */
+    fun group(title: String?, rows: List<View>): LinearLayout {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            rows.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(MATCH, WRAP).apply { if (i > 0) topMargin = dp(2) }) }
+            regroup(this)
+        }
+        if (title == null) return card
+        return vertical(text(title, 14f, p.primary, true).apply { setPadding(dp(16), dp(4), dp(16), dp(8)) }, card)
     }
 
     /** (Re)applies the group corners to the currently visible rows. */
@@ -462,6 +503,50 @@ class Field(private val a: BaseActivity, private val label: String, iconRes: Int
             Color.TRANSPARENT, a.dp(12).toFloat(), stroke = a.dp(if (focused || error) 2 else 1),
             strokeColor = if (error) a.p.error else if (focused) a.p.primary else a.p.outline,
         )
+    }
+}
+
+/** Lays children out left to right, wrapping onto new lines (for chips). */
+class FlowLayout(ctx: Context, private val gap: Int) : ViewGroup(ctx) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val max = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
+        var x = 0
+        var y = 0
+        var line = 0
+        for (i in 0 until childCount) {
+            val c = getChildAt(i)
+            if (c.visibility == GONE) continue
+            measureChild(c, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST), heightMeasureSpec)
+            if (x > 0 && x + c.measuredWidth > max) {
+                x = 0
+                y += line + gap
+                line = 0
+            }
+            x += c.measuredWidth + gap
+            line = maxOf(line, c.measuredHeight)
+        }
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), y + line + paddingTop + paddingBottom)
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val max = r - l - paddingLeft - paddingRight
+        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        var x = 0
+        var y = paddingTop
+        var line = 0
+        for (i in 0 until childCount) {
+            val c = getChildAt(i)
+            if (c.visibility == GONE) continue
+            if (x > 0 && x + c.measuredWidth > max) {
+                x = 0
+                y += line + gap
+                line = 0
+            }
+            val left = if (rtl) r - l - paddingRight - x - c.measuredWidth else paddingLeft + x
+            c.layout(left, y, left + c.measuredWidth, y + c.measuredHeight)
+            x += c.measuredWidth + gap
+            line = maxOf(line, c.measuredHeight)
+        }
     }
 }
 

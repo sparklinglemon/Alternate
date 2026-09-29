@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -174,6 +175,10 @@ class CallReceiver : BroadcastReceiver() {
         }
         root.setOnClickListener { if (collapsed) toggleCollapse(wm, root, params) }
         wm.addView(root, params)
+        // Drop in from the top.
+        root.alpha = 0f
+        root.translationY = -dp(24).toFloat()
+        root.animate().alpha(1f).translationY(0f).setDuration(320).setInterpolator(DecelerateInterpolator(2f)).start()
         overlay = root
     }
 
