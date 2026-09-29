@@ -3,11 +3,26 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// Release signing (see ANDROID_RELEASE_SETUP.md)
+// Release signing (see ANDROID_RELEASE_SETUP.md). The release key comes from android/keystore.properties
+// (storeFile, storePassword, keyAlias, keyPassword) or, in CI, from the RELEASE_KEYSTORE_FILE,
+// RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD environment variables or Gradle properties.
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def releaseSetting = { String propertiesKey, String name ->
+    keystoreProperties[propertiesKey] ?: findProperty(name) ?: System.getenv(name)
+}
+def releaseStoreFile = releaseSetting('storeFile', 'RELEASE_KEYSTORE_FILE')
+def releaseStorePassword = releaseSetting('storePassword', 'RELEASE_KEYSTORE_PASSWORD')
+def releaseKeyAlias = releaseSetting('keyAlias', 'RELEASE_KEY_ALIAS')
+def releaseKeyPassword = releaseSetting('keyPassword', 'RELEASE_KEY_PASSWORD') ?: releaseStorePassword
+def hasReleaseKey = releaseStoreFile && releaseStorePassword && releaseKeyAlias
+// The release workflow passes -PrequireReleaseKey so a missing key fails the build instead of shipping a debug-signed APK.
+if (!hasReleaseKey && findProperty('requireReleaseKey')) {
+    throw new GradleException('requireReleaseKey is set but no release key is configured: provide android/keystore.properties ' +
+            'or RELEASE_KEYSTORE_FILE, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD.')
 }
 
 android {
@@ -31,11 +46,12 @@ android {
             keyPassword 'android'
         }
         release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+            if (hasReleaseKey) {
+                // keystore.properties paths are relative to android/app, like before; absolute paths work too.
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
@@ -45,9 +61,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.release
-            }
+            // Without a release key (local test builds, build-apk.yml) fall back to the debug key so the APK still
+            // installs. Such an APK can't update a release-signed install; android-release.yml refuses to publish one.
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

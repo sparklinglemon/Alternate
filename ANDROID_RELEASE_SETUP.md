@@ -1,95 +1,128 @@
-# GitHub Actions Android Release Setup
+# Android Release Setup
 
-This document explains how to set up the GitHub Actions workflow for automated Android releases.
+Releases of this fork are signed with a release key that belongs to this fork. Every release signed with the
+same key installs as an in-place update over the previous one. This document covers creating that key once,
+storing it as GitHub secrets, and publishing releases.
 
-## Required GitHub Secrets
+## 1. Create the release key (once)
 
-You need to add the following secrets to your GitHub repository:
-
-### 1. KEYSTORE_BASE64
-
-Your release keystore file encoded in base64.
-
-To generate this:
+You need a JDK (17 or newer, for `keytool`) and, to set the secrets from the script, the GitHub CLI (`gh`),
+logged in with access to this repository.
 
 ```bash
-# Navigate to your keystore directory
-cd keystore
-# Encode your keystore file to base64
-base64 -i alternate-release-key.jks | tr -d '\n' > keystore_base64.txt
+scripts/create-release-key.sh --set-secrets
 ```
 
-Copy the contents of `keystore_base64.txt` and add it as `KEYSTORE_BASE64` secret in GitHub.
+The script:
 
-### 2. KEYSTORE_PASSWORD
+- asks for a certificate name and a password (at least 12 characters, never printed or saved),
+- creates an RSA 4096 key valid for 30 years in `~/alternate-release/alternate-release.jks`
+  (change with `--out`; it refuses paths inside the repository and never overwrites an existing keystore),
+- with `--set-secrets`, stores the four secrets below in the repository with `gh secret set`.
 
-The password for your keystore file.
+Run `scripts/create-release-key.sh --help` for all options.
 
-### 3. KEY_ALIAS
+> **Back up the keystore and its password.** Copy the `.jks` file to at least one safe place off this
+> computer and keep the password and alias in a password manager. If you lose either, no future release can
+> be installed as an update: every user would have to uninstall and reinstall. Never commit the keystore, the
+> password, or a base64 copy of it (`.gitignore` covers `*.jks`, `*.keystore`, `keystore.properties` and
+> `*_base64.txt`, but don't rely on it).
 
-The alias of your signing key within the keystore.
+## 2. GitHub secrets
 
-### 4. KEY_PASSWORD
+The release workflow needs these repository secrets (**Settings → Secrets and variables → Actions**):
 
-The password for your signing key.
+| Secret              | Value                                                    |
+| ------------------- | -------------------------------------------------------- |
+| `KEYSTORE_BASE64`   | The keystore file, base64 encoded on one line            |
+| `KEYSTORE_PASSWORD` | The keystore password                                    |
+| `KEY_ALIAS`         | The key alias (`alternate` unless you chose another)     |
+| `KEY_PASSWORD`      | The key password (the same as the keystore password)     |
 
-## How to Add Secrets to GitHub
-
-1. Go to your GitHub repository
-2. Click on **Settings** tab
-3. In the left sidebar, click **Secrets and variables** → **Actions**
-4. Click **New repository secret**
-5. Add each secret with the exact names mentioned above
-
-## Workflow Trigger
-
-The workflow is triggered when you push a tag that starts with 'v':
+The script sets them with `--set-secrets`. To set them by hand from an existing keystore:
 
 ```bash
-# Create and push a tag
-git tag v1.1.0
-git push origin v1.1.0
+base64 < ~/alternate-release/alternate-release.jks | tr -d '\n' | gh secret set KEYSTORE_BASE64
+gh secret set KEYSTORE_PASSWORD   # prompts for the value
+gh secret set KEY_ALIAS --body alternate
+gh secret set KEY_PASSWORD        # same value as KEYSTORE_PASSWORD
 ```
 
-## What the Workflow Does
+## 3. Publish a release
 
-1. **Setup Environment**: Installs Java
-2. **Build APK**: Uses Gradle to build the release APK
-3. **Sign APK**: Signs the APK with your release keystore
-4. **Create Release**: Creates a GitHub release with the tag
-5. **Upload APK**: Uploads the APK to the release
+1. Bump the version in `android/app/build.gradle`:
+   - `versionCode` must be **higher than in the last release** (16 → 17 → 18…). Android only installs an
+     update over an existing install when its `versionCode` is higher. The workflow checks this against the
+     `output-metadata.json` of the latest release and fails if it isn't.
+   - `versionName` is the version users see (for example `3.0.1`).
+2. Optionally add release notes in `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`: the first
+   line is the title (`3.0.1 – Short description`), the following `- ` lines become the release notes.
+3. Commit, then tag and push:
 
-## Generated APK Files
+```bash
+git tag v3.0.1
+git push origin v3.0.1
+```
 
-The workflow creates the following files:
+Tags must start with `v`. A tag containing `-` (for example `v3.1.0-beta1`) is published as a pre-release.
+Pre-releases need a higher `versionCode` too.
 
-- `alternate-[tag].apk` - Universal APK (the app has no native code, so one APK fits every device)
-- `output-metadata.json` - Build metadata
+### What the workflow does
+
+`.github/workflows/android-release.yml` runs on every `v*` tag:
+
+1. Fails right away if any of the four secrets is missing. Nothing is published.
+2. Fails if `versionCode` is not higher than the latest release's.
+3. Decodes the keystore to a temporary file outside the checkout and builds with
+   `./gradlew assembleRelease -PrequireReleaseKey=true`, which fails instead of falling back to the debug key.
+4. Runs `apksigner verify` on the APK and refuses to publish one signed with the Android debug key.
+5. Creates the GitHub release with `alternate-<tag>.apk` and `output-metadata.json` attached.
+
+`.github/workflows/build-apk.yml` builds an APK on every push and pull request and attaches it to the run as an
+artifact. It uses the release key when the secrets are available and otherwise the debug key. A debug-signed
+APK installs for testing but cannot update a release install. It is never published as a release.
+
+## Installing for the first time
+
+This fork is signed with a different key than the upstream Alternate app, and both use the same package name
+(`com.lulu786.Alternate`). Android refuses to update an app with an APK from a different signer, so once:
+
+1. Back up anything you want to keep from the installed app (for example, export contacts).
+2. Uninstall the existing Alternate app.
+3. Install `alternate-<tag>.apk` from this fork's releases.
+
+After that, every new release installs over the previous one.
+
+## Building a signed release locally
+
+Create `android/keystore.properties` (ignored by git) pointing at your keystore:
+
+```properties
+storeFile=/home/you/alternate-release/alternate-release.jks
+storePassword=...
+keyAlias=alternate
+keyPassword=...
+```
+
+A relative `storeFile` is resolved from `android/app`. Instead of the file you can set the
+`RELEASE_KEYSTORE_FILE`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD`
+environment variables (or Gradle properties). Then:
+
+```bash
+cd android
+./gradlew assembleRelease -PrequireReleaseKey=true
+"$ANDROID_HOME"/build-tools/<version>/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+Without a release key, `assembleRelease` signs with the debug key (`android/app/debug.keystore`) unless
+`-PrequireReleaseKey=true` is passed.
 
 ## Troubleshooting
 
-### Common Issues:
-
-1. **Keystore decoding fails**: Make sure your base64 encoding doesn't contain newlines
-2. **Signing fails**: Verify your keystore password, key alias, and key password are correct
-3. **Build fails**: Run `./gradlew assembleRelease` in `android/` locally and check the Gradle output
-
-### Testing the Build Locally
-
-Before pushing a tag, you can test the build process locally:
-
-```bash
-# Build (replace with your actual keystore details)
-cd android
-./gradlew assembleRelease \
-  -Pandroid.injected.signing.store.file=../keystore/alternate-release-key.jks \
-  -Pandroid.injected.signing.store.password=YOUR_KEYSTORE_PASSWORD \
-  -Pandroid.injected.signing.key.alias=YOUR_KEY_ALIAS \
-  -Pandroid.injected.signing.key.password=YOUR_KEY_PASSWORD
-```
-
-## File Locations
-
-After a successful build, APKs will be located at:
-
-- `android/app/build/outputs/apk/release/app-release.apk`
+1. **"Missing repository secrets"**: add the secrets from step 2.
+2. **Keystore decoding fails**: `KEYSTORE_BASE64` must be the base64 of the `.jks` file on a single line.
+3. **Signing fails**: check the password and the alias (`keytool -list -keystore <file>` shows the alias).
+4. **"versionCode ... is not higher"**: bump `versionCode`, commit, delete the tag
+   (`git push --delete origin <tag>` and `git tag -d <tag>`), and tag again.
+5. **"App not installed" on the phone**: the installed app is signed with a different key (for example the
+   upstream app or a debug build). Uninstall it and install the release APK.
