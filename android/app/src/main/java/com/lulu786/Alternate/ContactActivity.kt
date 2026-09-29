@@ -66,7 +66,7 @@ class ContactActivity : BaseActivity() {
             if (c.location.isNotEmpty()) info += row(R.drawable.ic_location, c.location, onLong = { copy(c.location) })
             addView(group("Contact info", info), lp())
 
-            addView(group("Connected Apps", apps(c, phone)), lp(top = 24))
+            addView(group("Connected Apps", apps(c, phone)), lp(top = 20))
 
             val about = mutableListOf<View>()
             if (c.website.isNotEmpty()) about += row(R.drawable.ic_link, c.website, titleColor = p.primary, onLong = { copy(c.website) }) {
@@ -77,7 +77,7 @@ class ContactActivity : BaseActivity() {
                 about += row(R.drawable.ic_cake, b, "Birthday", onLong = { copy(b) })
             }
             if (c.notes.isNotEmpty()) about += row(R.drawable.ic_notes, c.notes, onLong = { copy(c.notes) })
-            if (about.isNotEmpty()) addView(group("About ${c.name.trim().substringBefore(' ')}", about), lp(top = 24))
+            if (about.isNotEmpty()) addView(group("About ${c.name.trim().substringBefore(' ')}", about), lp(top = 20))
 
             addView(button("Share Contact", Btn.TONAL) { Share.contacts(this@ContactActivity, listOf(c)) }, lp(top = 32))
             addView(button("Delete Contact", Btn.DANGER) {
@@ -88,7 +88,9 @@ class ContactActivity : BaseActivity() {
                 }
             }, lp(top = 12))
         }
-        setScreen(vertical(bar, scroll(content)).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        val scroller = scroll(content)
+        setScreen(vertical(bar, scroller).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        tintOnScroll(bar, scroller)
     }
 
     private fun centered(v: android.widget.TextView) = v.apply { gravity = Gravity.CENTER }

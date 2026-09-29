@@ -2,7 +2,9 @@ package com.lulu786.Alternate
 
 import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.content.ClipboardManager
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -14,7 +16,9 @@ import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -46,7 +50,8 @@ class EditActivity : BaseActivity() {
     private lateinit var appointment: Field
     private lateinit var location: Field
     private lateinit var extraBox: LinearLayout
-    private lateinit var addButton: TextView
+    private lateinit var chipBox: LinearLayout
+    private lateinit var chips: FlowLayout
     private lateinit var saveButton: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +67,14 @@ class EditActivity : BaseActivity() {
         birthday = o?.birthday ?: ""
 
         val bar = Bar(this).apply { title.text = if (o == null) "Add Contact" else "Edit Contact" }
+        bar.addView(text("Save", 14f, p.onPrimary, true).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(40)
+            setPadding(dp(20), 0, dp(20), 0)
+            val bg = shape(p.primary, dp(20).toFloat())
+            background = ripple(bg, bg, alpha(p.onPrimary, 0x33))
+            setOnClickListener { save() }
+        }, LinearLayout.LayoutParams(WRAP, WRAP).apply { marginEnd = dp(8) })
 
         avatar = Avatar(this).apply {
             contentDescription = "Contact photo"
@@ -76,6 +89,13 @@ class EditActivity : BaseActivity() {
             leading.visibility = View.GONE
             value = o?.let { nationalOf(it) } ?: ""
             edit.addTextChangedListener(PasteFixer())
+            box.addView(text("Paste", 14f, p.primary, true).apply {
+                gravity = Gravity.CENTER
+                minHeight = dp(36)
+                setPadding(dp(12), 0, dp(12), 0)
+                background = ripple(null, shape(Color.BLACK, dp(18).toFloat()), alpha(p.primary, 0x1F))
+                setOnClickListener { pasteNumber() }
+            }, LinearLayout.LayoutParams(WRAP, WRAP).apply { marginEnd = dp(4) })
         }
         countryButton = text("", 15f, p.onSurface).apply {
             gravity = Gravity.CENTER
@@ -88,7 +108,10 @@ class EditActivity : BaseActivity() {
         appointment = Field(this, "Appointment", R.drawable.ic_work).apply { value = o?.appointment ?: "" }
         location = Field(this, "Location", R.drawable.ic_location).apply { value = o?.location ?: "" }
         extraBox = vertical()
-        addButton = button("Add fields", Btn.TONAL) { addField() }
+        chips = FlowLayout(this, dp(8))
+        chipBox = vertical(text("Add more details", 14f, p.onSurfaceVariant, true).apply { setPadding(dp(4), 0, 0, 0) }, chips).apply {
+            chips.layoutParams = lp(top = 10)
+        }
         saveButton = button("Save Contact", Btn.FILLED) { save() }
 
         if (o != null) {
@@ -116,13 +139,45 @@ class EditActivity : BaseActivity() {
             addView(appointment.view, lp(top = 16))
             addView(location.view, lp(top = 16))
             addView(extraBox, lp())
-            addView(addButton, lp(top = 36))
-            addView(saveButton, lp(top = 12))
+            addView(chipBox, lp(top = 20))
+            addView(saveButton, lp(top = 32))
         }
-        setScreen(vertical(bar, scroll(form)).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        val scroller = scroll(form)
+        setScreen(vertical(bar, scroller).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        tintOnScroll(bar, scroller)
         updateCountry()
         updatePhoto()
         renderExtras()
+        listOf(name, number, appointment, location).forEach { saveOnEnter(it.edit) }
+
+        // Speed up saving a number: a new contact starts in the phone field, optionally pre-filled from search.
+        if (o == null) {
+            intent.getStringExtra("prefill")?.let { number.value = it }
+            number.edit.requestFocus()
+            number.edit.setSelection(number.edit.length())
+            @Suppress("DEPRECATION")
+            window.setSoftInputMode(
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            )
+        }
+    }
+
+    /** The keyboard's action key saves the contact. */
+    private fun saveOnEnter(edit: EditText) {
+        edit.imeOptions = EditorInfo.IME_ACTION_DONE
+        edit.setOnEditorActionListener { _, action, e ->
+            val enter = e?.keyCode == KeyEvent.KEYCODE_ENTER && e.action == KeyEvent.ACTION_DOWN
+            if (action == EditorInfo.IME_ACTION_DONE || enter) { save(); true } else false
+        }
+    }
+
+    private fun pasteNumber() {
+        val clip = (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+        val t = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
+        if (t.isNullOrBlank()) return toast("Clipboard is empty")
+        number.value = t
+        number.edit.requestFocus()
+        number.edit.setSelection(number.edit.length())
     }
 
     /**
@@ -152,6 +207,7 @@ class EditActivity : BaseActivity() {
             if (parsed.country !== country) {
                 country = parsed.country
                 updateCountry()
+                toast("Country set to ${country.name}")
             }
             if (parsed.national != t) s.replace(0, s.length, parsed.national)
         }
@@ -197,6 +253,7 @@ class EditActivity : BaseActivity() {
                 }
                 else -> edit.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             }
+            if (key != "notes" && key != "birthday") saveOnEnter(edit)
             trailing(R.drawable.ic_close, "Remove $label") {
                 visible -= key
                 value = ""
@@ -214,21 +271,29 @@ class EditActivity : BaseActivity() {
             (f.view.parent as? LinearLayout)?.removeView(f.view)
             extraBox.addView(f.view, lp(top = 16))
         }
-        addButton.enable(visible.size < extras.size)
+        chips.removeAllViews()
+        val remaining = extras.keys.filter { it !in visible }
+        remaining.forEach { key -> chips.addView(chip(extras[key]!!.first) { addField(key) }) }
+        chipBox.visibility = if (remaining.isEmpty()) View.GONE else View.VISIBLE
     }
 
-    private fun addField() {
-        val remaining = extras.keys.filter { it !in visible }
-        if (remaining.isEmpty()) return
-        AlertDialog.Builder(this)
-            .setTitle("Choose fields to add")
-            .setItems(remaining.map { extras[it]!!.first }.toTypedArray()) { _, i ->
-                val key = remaining[i]
-                visible += key
-                renderExtras()
-                if (key == "birthday") pickBirthday() else field(key).edit.requestFocus()
-            }
-            .show()
+    /** Outlined "+ Label" chip for an optional field. */
+    private fun chip(label: String, onClick: () -> Unit) = text(label, 14f, p.onSurfaceVariant, true).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = dp(32)
+        setPadding(dp(8), 0, dp(16), 0)
+        setCompoundDrawablesRelative(drawable(R.drawable.ic_add, p.primary, 18), null, null, null)
+        compoundDrawablePadding = dp(8)
+        val r = dp(8).toFloat()
+        background = ripple(shape(Color.TRANSPARENT, r, stroke = dp(1), strokeColor = p.outline), shape(Color.BLACK, r))
+        contentDescription = "Add $label"
+        setOnClickListener { onClick() }
+    }
+
+    private fun addField(key: String) {
+        visible += key
+        renderExtras()
+        if (key == "birthday") pickBirthday() else field(key).edit.requestFocus()
     }
 
     private fun pickBirthday() {
@@ -412,6 +477,7 @@ class EditActivity : BaseActivity() {
         saveButton.enable(false)
         Store.save(this, contact, o?.fullPhoneNumber) { success ->
             if (success) {
+                toast("Saved $n")
                 if (o != null) {
                     startActivity(Intent(this, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))

@@ -39,7 +39,7 @@ class SettingsActivity : BaseActivity() {
                         recreate()
                     }
                 },
-            )), lp(top = 24))
+            )), lp(top = 20))
 
             val security = mutableListOf<View>(
                 switchRow(R.drawable.ic_lock, "Passcode Lock", "Require a PIN to open the app", lockOn) { on ->
@@ -59,7 +59,7 @@ class SettingsActivity : BaseActivity() {
                     }
                 }
             }
-            addView(group("Security", security), lp(top = 24))
+            addView(group("Security", security), lp(top = 20))
 
             val count = Store.contacts.size
             addView(group("Contacts Backup", listOf(
@@ -76,31 +76,14 @@ class SettingsActivity : BaseActivity() {
                         gravity = Gravity.CENTER
                     }, lp(top = 12))
                 },
-            )), lp(top = 24))
-
-            addView(group("Useful Links", listOf(
-                row(R.drawable.ic_book, "README", "Check out the app's README on GitHub") {
-                    open("https://github.com/BioHazard786/Alternate/blob/main/README.md")
-                },
-                row(R.drawable.ic_bug, "GitHub Issues", "Create an issue on GitHub") {
-                    open("https://github.com/BioHazard786/Alternate/issues")
-                },
-                row(R.drawable.ic_heart, "Support Development", "Think I deserve a coffee? Click here!") {
-                    open("https://github.com/sponsors/BioHazard786")
-                },
-            )), lp(top = 24))
-
-            addView(group("Developed by", listOf(
-                row(R.drawable.ic_person, "Mohd Zaid", "Mail · GitHub · Telegram"),
-                row(R.drawable.ic_email_outline, "Mail") { open("mailto:message@zaid.qzz.io") },
-                row(R.drawable.ic_github, "GitHub") { open("https://github.com/BioHazard786") },
-                row(R.drawable.ic_telegram, "Telegram") { open("https://t.me/lulu786") },
-            )), lp(top = 24))
+            )), lp(top = 20))
 
             val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: ""
             addView(text("Alternate $version", 13f, p.onSurfaceVariant).apply { gravity = Gravity.CENTER }, lp(top = 24))
         }
-        setScreen(vertical(bar, scroll(content)).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        val scroller = scroll(content)
+        setScreen(vertical(bar, scroller).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
+        tintOnScroll(bar, scroller)
     }
 
     private fun switchRow(iconRes: Int, title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit): View {

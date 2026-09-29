@@ -1,0 +1,9 @@
+v3.1.0 - Faster saving and a cleaner look
+ - New contacts start in the phone field, and there's a Save button in the top bar; the keyboard's Done key saves too
+ - Paste button next to the phone number; pasting a number with a country code picks the country and says so
+ - Search for a number you haven't saved and tap "Save +number" to add it straight away
+ - Optional fields (Email, Notes, Birthday...) are one-tap chips under the form
+ - "Add number" button on the home screen shrinks to an icon while you scroll
+ - Section labels sit above their cards, A-Z headers line up with the avatars, and the top bar tints when you scroll
+ - Screens slide in and the caller popup drops in from the top
+ - Settings is shorter: the links and credits moved to the README
