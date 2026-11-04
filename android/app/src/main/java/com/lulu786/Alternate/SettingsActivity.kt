@@ -6,6 +6,7 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
+import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
@@ -78,12 +79,48 @@ class SettingsActivity : BaseActivity() {
                 },
             )), lp(top = 20))
 
+            addView(group("Automatic Backup", autoBackup()), lp(top = 20))
+
             val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: ""
             addView(text("Alternate $version", 13f, p.onSurfaceVariant).apply { gravity = Gravity.CENTER }, lp(top = 24))
         }
         val scroller = scroll(content)
         setScreen(vertical(bar, scroller).apply { getChildAt(1).layoutParams = lp(h = 0, weight = 1f) })
         tintOnScroll(bar, scroller)
+    }
+
+    private fun autoBackup(): List<View> {
+        val rows = mutableListOf(
+            switchRow(R.drawable.ic_backup, "Back Up After Every Change", "Keeps the 3 newest backups in a folder you choose",
+                Backup.enabled(this)) { on ->
+                if (on) pickBackupFolder() else {
+                    Backup.setFolder(this, null)
+                    render()
+                }
+            },
+        )
+        if (!Backup.enabled(this)) return rows
+        rows += row(R.drawable.ic_folder, "Backup Folder", Backup.folderName(this) ?: "Unknown folder") { pickBackupFolder() }
+        val last = Backup.lastBackup(this)
+        val status = Backup.lastError(this)?.let { "Last backup failed: $it" }
+            ?: if (last > 0) "Last backup " + DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
+            else "No backup yet"
+        rows += row(R.drawable.ic_upload, "Back Up Now", status) {
+            if (Store.contacts.isEmpty()) toast("No contacts to back up")
+            else Backup.now(applicationContext, Store.contacts) { r ->
+                toast(if (r.isSuccess) "Saved ${r.getOrNull()}" else "Backup failed")
+                render()
+            }
+        }
+        return rows
+    }
+
+    private fun pickBackupFolder() {
+        val picked = runCatching { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_FOLDER) }
+        if (picked.isFailure) {
+            toast("No app found to pick a folder")
+            render()
+        }
     }
 
     private fun switchRow(iconRes: Int, title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit): View {
@@ -198,6 +235,14 @@ class SettingsActivity : BaseActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
+        if (requestCode == REQ_FOLDER) {
+            if (resultCode == RESULT_OK && uri != null) {
+                runCatching { Backup.setFolder(this, uri) }.onFailure { toast("Couldn't get access to that folder") }
+                if (Backup.enabled(this) && Store.contacts.isNotEmpty()) Backup.now(applicationContext, Store.contacts) { render() }
+            }
+            render()
+            return
+        }
         if (resultCode != RESULT_OK || uri == null) return
         if (requestCode == REQ_IMPORT) {
             val country = Phone.byIso(Phone.dialCountry(this)) ?: Phone.countries.first()
@@ -227,5 +272,6 @@ class SettingsActivity : BaseActivity() {
     companion object {
         private const val REQ_IMPORT = 1
         private const val REQ_EXPORT = 2
+        private const val REQ_FOLDER = 3
     }
 }
