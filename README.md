@@ -52,6 +52,8 @@ A privacy-focused, lightweight native Android app (Kotlin) that helps you identi
 - **Phone Number Validation**: Smart phone number input with country selection
 - **Paste Friendly**: Paste numbers straight from your dialer (`+91 98765 43210`, `(555) 123-4567`, ...) and the country is picked automatically
 - **Quick Saving**: New contacts open in the phone field with a Paste button, and searching for an unsaved number offers to save it
+- **Move to Google Contacts**: "Save to Google Contacts" opens Google Contacts' new-contact screen pre-filled with every field
+- **Automatic Backups**: Pick a folder and Alternate writes a timestamped VCF backup after every change, keeping the 3 newest
 - **Native Caller ID**: Call popup and contacts directory built on Android's own telephony APIs
 - **Country Selector**: Searchable country picker
 - **Material Design**: Modern UI following Material Design 3 principles

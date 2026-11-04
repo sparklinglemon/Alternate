@@ -1,0 +1,3 @@
+v3.1.1 - Google Contacts and automatic backups
+ - "Save to Google Contacts" on a contact opens Google Contacts' new-contact screen with every field filled in
+ - Automatic backups: pick a folder in Settings and Alternate saves a timestamped VCF there after every change, keeping the 3 newest

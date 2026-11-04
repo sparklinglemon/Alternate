@@ -79,7 +79,10 @@ class ContactActivity : BaseActivity() {
             if (c.notes.isNotEmpty()) about += row(R.drawable.ic_notes, c.notes, onLong = { copy(c.notes) })
             if (about.isNotEmpty()) addView(group("About ${c.name.trim().substringBefore(' ')}", about), lp(top = 20))
 
-            addView(button("Share Contact", Btn.TONAL) { Share.contacts(this@ContactActivity, listOf(c)) }, lp(top = 32))
+            addView(button("Save to Google Contacts", Btn.TONAL) {
+                if (!Share.toContacts(this@ContactActivity, c)) toast("No contacts app found")
+            }, lp(top = 32))
+            addView(button("Share Contact", Btn.TONAL) { Share.contacts(this@ContactActivity, listOf(c)) }, lp(top = 12))
             addView(button("Delete Contact", Btn.DANGER) {
                 alert("Delete contact?", "This contact will be permanently deleted from your device", "Delete", "Cancel") {
                     Store.delete(this@ContactActivity, listOf(c.fullPhoneNumber)) { ok ->

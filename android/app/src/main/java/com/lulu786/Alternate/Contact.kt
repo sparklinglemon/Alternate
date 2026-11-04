@@ -177,6 +177,7 @@ object Store {
     }) { r ->
         if (r.isSuccess) {
             contacts = sort(contacts.filter { it.fullPhoneNumber != original && it.fullPhoneNumber != contact.fullPhoneNumber } + contact)
+            Backup.changed(ctx, contacts)
         }
         done(r.isSuccess)
     }
@@ -186,7 +187,10 @@ object Store {
         val existing = contacts.mapTo(HashSet()) { it.fullPhoneNumber }
         val fresh = list.filter { existing.add(it.fullPhoneNumber) }
         bg({ Db.get(ctx).put(fresh) }) { r ->
-            if (r.isSuccess) contacts = sort(contacts + fresh)
+            if (r.isSuccess && fresh.isNotEmpty()) {
+                contacts = sort(contacts + fresh)
+                Backup.changed(ctx, contacts)
+            }
             done(if (r.isSuccess) fresh.size else null)
         }
     }
@@ -195,6 +199,7 @@ object Store {
         if (r.isSuccess) {
             val gone = numbers.toSet()
             contacts = contacts.filter { it.fullPhoneNumber !in gone }
+            Backup.changed(ctx, contacts)
         }
         done(r.isSuccess)
     }
